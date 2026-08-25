@@ -133,6 +133,41 @@ describe('metaFromNextData', () => {
     expect(meta?.topics).toEqual(['Greedy', 'Sorting', 'Math']);
   });
 
+  it('reads topic tags from GFG\'s nested tags.topic_tags (ignoring company_tags)', () => {
+    // The real GFG __NEXT_DATA__ shape: a `tags` OBJECT, not a flat array.
+    const data = {
+      props: {
+        pageProps: {
+          problemInfo: {
+            problemName: 'Subarray with Given Sum',
+            difficulty: 'Medium',
+            tags: {
+              company_tags: ['Amazon', 'Google', 'Visa'],
+              topic_tags: ['Arrays', 'Prefix Sum', 'Searching', 'sliding-window'],
+            },
+          },
+        },
+      },
+    };
+    const meta = metaFromNextData(root(nextData(data)), url);
+    expect(meta?.topics).toEqual(['Arrays', 'Prefix Sum', 'Searching', 'sliding-window']);
+  });
+
+  it('prefers problem_name over a generic title/name from unrelated nodes', () => {
+    // A nav/header node carries title:"Courses" and sits BEFORE the problem in
+    // depth-first order — the collision that titled every real solve "Courses".
+    const data = {
+      props: {
+        pageProps: {
+          header: { title: 'Courses', name: 'GeeksforGeeks' },
+          problemInfo: { problem_name: 'Indexes of Subarray Sum', difficulty: 'Medium' },
+        },
+      },
+    };
+    const meta = metaFromNextData(root(nextData(data)), url);
+    expect(meta?.title).toBe('Indexes of Subarray Sum');
+  });
+
   it('returns undefined when no title key is present', () => {
     const meta = metaFromNextData(root(nextData({ props: { difficulty: 'Medium' } })), url);
     expect(meta).toBeUndefined();
