@@ -4,8 +4,483 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>GFGHub</title>
+    <style>
+      /* GFGHub popup — Apple-HIG dark theme. Styling only; all behaviour lives
+         in Popup.tsx. Plain <style> block (no CSS deps, loads with the HTML so
+         there's no flash of unstyled content).
+
+         Follows Apple's guidance: 8px container radius, 6px control radius,
+         4/8/12/16/20/24 spacing, 1px low-opacity separators, SF Pro type,
+         translucency used sparingly (blur on the panel only). */
+      :root {
+        --bg: #0f1115;
+        --surface: rgba(22, 24, 28, 0.72);
+        --card: rgba(255, 255, 255, 0.03);
+        --card-hover: rgba(255, 255, 255, 0.055);
+        --border: rgba(255, 255, 255, 0.08);
+        --border-strong: rgba(255, 255, 255, 0.14);
+        --text: #f2f3f5;
+        --text-2: #a1a6ad;
+        --green: #22c55e;
+        --amber: #f59e0b;
+        --red: #ef4444;
+        --r-panel: 14px;
+        --r-container: 8px;
+        --r-control: 6px;
+        --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display",
+          "Segoe UI", system-ui, sans-serif;
+        --ease: 150ms ease;
+      }
+
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        margin: 0;
+        background: var(--bg);
+      }
+
+      body {
+        padding: 16px;
+        font-family: var(--font);
+        color: var(--text);
+        -webkit-font-smoothing: antialiased;
+        text-rendering: optimizeLegibility;
+      }
+
+      /* --- Panel (the one place translucency/blur is used) --------------- */
+      .panel {
+        width: 336px;
+        padding: 20px;
+        border-radius: var(--r-panel);
+        background: var(--surface);
+        backdrop-filter: blur(20px) saturate(160%);
+        -webkit-backdrop-filter: blur(20px) saturate(160%);
+        border: 1px solid var(--border);
+        box-shadow:
+          0 12px 32px rgba(0, 0, 0, 0.4),
+          inset 0 1px 0 rgba(255, 255, 255, 0.04);
+      }
+
+      /* --- Header wordmark (SF Pro Display, premium two-weight) ---------- */
+      .brand {
+        margin: 0 0 20px;
+        font-size: 24px;
+        letter-spacing: -0.021em;
+        line-height: 1;
+      }
+      .brand-gfg {
+        font-weight: 700;
+        color: var(--text);
+      }
+      .brand-hub {
+        font-weight: 500;
+        color: var(--text-2);
+      }
+
+      /* --- Text helpers -------------------------------------------------- */
+      .muted {
+        color: var(--text-2);
+        margin: 8px 0;
+        font-size: 13px;
+      }
+      .hint {
+        color: var(--text-2);
+        font-size: 12px;
+        line-height: 1.45;
+        margin: 12px 0 0;
+      }
+
+      /* --- Connection status (no dot) ----------------------------------- */
+      .status-pill {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        margin: 0 0 20px;
+        padding: 10px 12px;
+        font-size: 13px;
+        color: var(--text-2);
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: var(--r-container);
+      }
+      .status-pill .user {
+        font-weight: 600;
+        color: var(--green);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      /* --- Form ---------------------------------------------------------- */
+      .field {
+        display: block;
+      }
+      .field-label {
+        display: block;
+        margin: 0 0 8px;
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--text-2);
+      }
+
+      .select,
+      .text-input {
+        width: 100%;
+        font-family: var(--font);
+        font-size: 13.5px;
+        color: var(--text);
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: var(--r-control);
+        transition:
+          background var(--ease),
+          border-color var(--ease),
+          box-shadow var(--ease);
+      }
+
+      .select {
+        padding: 11px 36px 11px 12px;
+        font-weight: 500;
+        cursor: pointer;
+        appearance: none;
+        -webkit-appearance: none;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23a1a6ad' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+        background-repeat: no-repeat;
+        background-position: right 11px center;
+      }
+      .select:hover,
+      .text-input:hover {
+        border-color: var(--border-strong);
+      }
+      .select:focus,
+      .text-input:focus {
+        outline: none;
+        border-color: rgba(34, 197, 94, 0.55);
+        box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.14);
+      }
+      .select option {
+        background: #16181c;
+        color: var(--text);
+      }
+
+      /* Centred "…or create a new one" with 1px flanking rules. */
+      .or-divider {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin: 16px 0 12px;
+        color: var(--text-2);
+        font-size: 12px;
+      }
+      .or-divider::before,
+      .or-divider::after {
+        content: "";
+        flex: 1;
+        height: 1px;
+        background: var(--border);
+      }
+
+      .create-row {
+        display: flex;
+        gap: 8px;
+      }
+      .text-input {
+        flex: 1;
+        min-width: 0;
+        padding: 11px 12px;
+      }
+      .text-input::placeholder {
+        color: var(--text-2);
+        opacity: 0.7;
+      }
+
+      /* --- Buttons ------------------------------------------------------- */
+      .btn-primary,
+      .btn-create {
+        font-family: var(--font);
+        font-weight: 600;
+        color: #ffffff;
+        background: var(--green);
+        border: none;
+        border-radius: var(--r-control);
+        cursor: pointer;
+        transition:
+          filter var(--ease),
+          transform 120ms ease,
+          opacity var(--ease);
+      }
+      .btn-primary:hover:not(:disabled),
+      .btn-create:hover:not(:disabled) {
+        filter: brightness(1.08);
+      }
+      .btn-primary:active:not(:disabled),
+      .btn-create:active:not(:disabled) {
+        transform: translateY(1px);
+      }
+      .btn-primary:focus-visible,
+      .btn-create:focus-visible {
+        outline: none;
+        box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.3);
+      }
+      .btn-primary:disabled,
+      .btn-create:disabled {
+        opacity: 0.45;
+        cursor: default;
+      }
+      .btn-primary {
+        width: 100%;
+        padding: 12px 14px;
+        font-size: 14px;
+      }
+      .btn-create {
+        padding: 0 20px;
+        min-height: 42px;
+        font-size: 13.5px;
+        white-space: nowrap;
+      }
+
+      /* --- Private-repository checkbox (native input, restyled) ---------- */
+      .check-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-top: 12px;
+        font-size: 13px;
+        color: var(--text-2);
+        cursor: pointer;
+      }
+      .check-row input[type="checkbox"] {
+        appearance: none;
+        -webkit-appearance: none;
+        flex: none;
+        width: 18px;
+        height: 18px;
+        margin: 0;
+        border: 1px solid var(--border-strong);
+        border-radius: var(--r-control);
+        background: var(--card);
+        cursor: pointer;
+        transition:
+          background var(--ease),
+          border-color var(--ease),
+          box-shadow var(--ease);
+      }
+      .check-row:hover input[type="checkbox"] {
+        border-color: rgba(255, 255, 255, 0.24);
+      }
+      .check-row input[type="checkbox"]:checked {
+        border-color: var(--green);
+        background:
+          url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-width='3.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 6L9 17l-5-5'/%3E%3C/svg%3E")
+            center / 11px 11px no-repeat,
+          var(--green);
+      }
+      .check-row input[type="checkbox"]:focus-visible {
+        outline: none;
+        box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.24);
+      }
+
+      /* --- Stat cards: Easy / Medium / Hard ------------------------------ */
+      .stats {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 8px;
+        margin-top: 20px;
+        padding-top: 20px;
+        border-top: 1px solid var(--border);
+      }
+      .stat {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 6px;
+        padding: 12px 8px;
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: var(--r-container);
+      }
+      .stat.easy {
+        --accent: var(--green);
+      }
+      .stat.medium {
+        --accent: var(--amber);
+      }
+      .stat.hard {
+        --accent: var(--red);
+      }
+      .stat-icon {
+        display: flex;
+        color: var(--accent);
+      }
+      .stat-label {
+        font-size: 12px;
+        font-weight: 500;
+        color: var(--accent);
+      }
+      .stat-count {
+        font-size: 22px;
+        font-weight: 700;
+        letter-spacing: -0.02em;
+        color: var(--text);
+        line-height: 1;
+      }
+
+      /* --- Recent syncs (no dot) ---------------------------------------- */
+      .recent {
+        margin-top: 20px;
+        padding-top: 20px;
+        border-top: 1px solid var(--border);
+      }
+      .recent-head {
+        margin: 0 0 12px;
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--text);
+      }
+      .sync-list {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .sync-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 12px;
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: var(--r-container);
+        transition:
+          background var(--ease),
+          border-color var(--ease);
+      }
+      .sync-row:hover {
+        background: var(--card-hover);
+        border-color: var(--border-strong);
+      }
+      .sync-main {
+        flex: 1;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+      }
+      .sync-title {
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--text);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .sync-date {
+        font-size: 11.5px;
+        color: var(--text-2);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .sync-cat {
+        flex: none;
+        padding: 4px 10px;
+        font-size: 11.5px;
+        font-weight: 500;
+        color: var(--green);
+        background: rgba(34, 197, 94, 0.1);
+        border: 1px solid rgba(34, 197, 94, 0.2);
+        border-radius: var(--r-control);
+        white-space: nowrap;
+      }
+
+      /* --- Boxes: warn / error / device code / status footer ------------- */
+      .warn,
+      .error,
+      .code,
+      .status-bar {
+        border-radius: var(--r-container);
+      }
+      .warn {
+        padding: 12px;
+        font-size: 12px;
+        line-height: 1.45;
+        color: #fcd9a8;
+        background: rgba(245, 158, 11, 0.08);
+        border: 1px solid rgba(245, 158, 11, 0.25);
+      }
+      .warn p {
+        margin: 8px 0 0;
+      }
+      .warn code {
+        font-size: 11px;
+        padding: 1px 4px;
+        border-radius: 4px;
+        background: rgba(255, 255, 255, 0.08);
+      }
+      .error {
+        margin-top: 12px;
+        padding: 10px 12px;
+        font-size: 12px;
+        color: #f5a8a8;
+        background: rgba(239, 68, 68, 0.1);
+        border: 1px solid rgba(239, 68, 68, 0.3);
+        word-break: break-word;
+      }
+      .code {
+        margin-bottom: 12px;
+        padding: 16px 0;
+        font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+        font-size: 26px;
+        font-weight: 600;
+        letter-spacing: 4px;
+        text-align: center;
+        color: var(--green);
+        background: var(--card);
+        border: 1px solid var(--border);
+      }
+      .status-bar {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        margin-top: 20px;
+        padding: 10px 12px;
+        font-size: 12px;
+        color: var(--text-2);
+        background: var(--card);
+        border: 1px solid var(--border);
+        text-align: center;
+        word-break: break-word;
+      }
+      .status-bar svg {
+        flex: none;
+        color: var(--text-2);
+      }
+
+      /* --- Scrollbar ----------------------------------------------------- */
+      ::-webkit-scrollbar {
+        width: 8px;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: rgba(255, 255, 255, 0.12);
+        border-radius: 8px;
+      }
+      ::-webkit-scrollbar-track {
+        background: transparent;
+      }
+    </style>
   </head>
-  <body style="margin: 0">
+  <body>
     <div id="root"></div>
     <script type="module" src="./main.tsx"></script>
   </body>

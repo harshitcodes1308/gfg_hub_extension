@@ -12,6 +12,14 @@ function send<T = unknown>(msg: Message): Promise<T> {
   return chrome.runtime.sendMessage(msg) as Promise<T>;
 }
 
+// Presentation helper: format a sync's timestamp as "Aug 25, 2026 • 7:47 PM".
+function fmtWhen(ts: number): string {
+  const d = new Date(ts);
+  const date = d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+  const time = d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+  return `${date} • ${time}`;
+}
+
 export function Popup() {
   const [state, setState] = useState<AppState | null>(null);
   const [repos, setRepos] = useState<RepoOption[]>([]);
@@ -130,15 +138,18 @@ export function Popup() {
   const currentRepo = state?.repo ? `${state.repo.owner}/${state.repo.repo}` : '';
 
   return (
-    <div style={S.root}>
-      <h1 style={S.h1}>GFGHub</h1>
+    <div className="panel">
+      <h1 className="brand">
+        <span className="brand-gfg">GFG</span>
+        <span className="brand-hub">Hub</span>
+      </h1>
 
-      {!state && <p style={S.muted}>Loading…</p>}
+      {!state && <p className="muted">Loading…</p>}
 
       {state && !state.connected && !pendingCode && !clientIdConfigured && (
-        <div style={S.warn}>
+        <div className="warn">
           <strong>Not configured yet.</strong>
-          <p style={{ margin: '6px 0 0' }}>
+          <p>
             Create a GitHub OAuth App with <em>Device Flow</em> enabled, paste its Client ID into{' '}
             <code>src/config.ts</code>, then run <code>npm run build</code> and reload the
             extension.
@@ -147,21 +158,21 @@ export function Popup() {
       )}
 
       {state && !state.connected && !pendingCode && clientIdConfigured && (
-        <button style={S.primary} onClick={connect}>
+        <button className="btn-primary" onClick={connect}>
           Authorize with GitHub
         </button>
       )}
 
-      {error && <p style={S.error}>{error}</p>}
+      {error && <p className="error">{error}</p>}
 
       {pendingCode && !state?.connected && (
         <div>
-          <p style={S.muted}>Your one-time code (copied to your clipboard):</p>
-          <div style={S.code}>{pendingCode}</div>
-          <button style={S.primary} onClick={openGitHub}>
+          <p className="muted">Your one-time code (copied to your clipboard):</p>
+          <div className="code">{pendingCode}</div>
+          <button className="btn-primary" onClick={openGitHub}>
             Open GitHub sign-in page
           </button>
-          <p style={S.hint}>
+          <p className="hint">
             On the GitHub tab, paste the code (⌘V / Ctrl-V) and confirm. This popup updates
             on its own — if it closes, click the extension icon again to see the code.
           </p>
@@ -170,11 +181,14 @@ export function Popup() {
 
       {state?.connected && (
         <div>
-          <p style={S.connected}>✓ Connected as @{state.user?.login}</p>
-          <label style={S.label}>
-            Target repository
+          <div className="status-pill">
+            Connected as <span className="user">@{state.user?.login}</span>
+          </div>
+
+          <label className="field">
+            <span className="field-label">Target repository</span>
             <select
-              style={S.select}
+              className="select"
               value={currentRepo}
               onChange={(e) => chooseRepo(e.target.value)}
             >
@@ -190,20 +204,22 @@ export function Popup() {
             </select>
           </label>
 
-          <p style={S.orLabel}>…or create a new one</p>
-          <div style={S.createRow}>
+          <div className="or-divider">…or create a new one</div>
+
+          <div className="create-row">
             <input
-              style={S.input}
+              className="text-input"
               placeholder="new-repo-name"
               value={newRepoName}
               onChange={(e) => setNewRepoName(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && createRepo()}
             />
-            <button style={S.secondary} disabled={!newRepoName.trim() || creating} onClick={createRepo}>
+            <button className="btn-create" disabled={!newRepoName.trim() || creating} onClick={createRepo}>
               {creating ? 'Creating…' : 'Create'}
             </button>
           </div>
-          <label style={S.checkRow}>
+
+          <label className="check-row">
             <input
               type="checkbox"
               checked={newRepoPrivate}
@@ -212,14 +228,52 @@ export function Popup() {
             Private repository
           </label>
 
+          <div className="stats">
+            <div className="stat easy">
+              <span className="stat-icon">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10Z" />
+                  <path d="M2 21c0-3 1.85-5.36 5.08-6" />
+                </svg>
+              </span>
+              <span className="stat-label">Easy</span>
+              <span className="stat-count">{state.stats?.easy ?? 0}</span>
+            </div>
+            <div className="stat medium">
+              <span className="stat-icon">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <circle cx="12" cy="12" r="9" />
+                  <path d="M8 10h8" />
+                  <path d="M8 14h8" />
+                </svg>
+              </span>
+              <span className="stat-label">Medium</span>
+              <span className="stat-count">{state.stats?.medium ?? 0}</span>
+            </div>
+            <div className="stat hard">
+              <span className="stat-icon">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M6 20v-6" />
+                  <path d="M12 20V8" />
+                  <path d="M18 20v-9" />
+                </svg>
+              </span>
+              <span className="stat-label">Hard</span>
+              <span className="stat-count">{state.stats?.hard ?? 0}</span>
+            </div>
+          </div>
+
           {state.recentSyncs && state.recentSyncs.length > 0 && (
-            <div style={S.history}>
-              <p style={S.historyHead}>Recent syncs</p>
-              <ul style={S.list}>
+            <div className="recent">
+              <p className="recent-head">Recent syncs</p>
+              <ul className="sync-list">
                 {state.recentSyncs.slice(0, 8).map((r) => (
-                  <li key={r.slug} style={S.item}>
-                    <span style={S.itemTitle}>{r.title ?? r.slug}</span>
-                    <span style={S.itemMeta}>{r.category ?? '—'}</span>
+                  <li key={r.slug} className="sync-row">
+                    <span className="sync-main">
+                      <span className="sync-title">{r.title ?? r.slug}</span>
+                      {r.timestamp ? <span className="sync-date">{fmtWhen(r.timestamp)}</span> : null}
+                    </span>
+                    {r.category ? <span className="sync-cat">{r.category}</span> : null}
                   </li>
                 ))}
               </ul>
@@ -228,107 +282,25 @@ export function Popup() {
         </div>
       )}
 
-      {state?.lastStatus && <p style={S.status}>{state.lastStatus}</p>}
+      {state?.lastStatus && (
+        <p className="status-bar">
+          <svg
+            width="13"
+            height="13"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M21 12a9 9 0 1 1-2.64-6.36" />
+            <path d="M21 3v5h-5" />
+          </svg>
+          {state.lastStatus}
+        </p>
+      )}
     </div>
   );
 }
-
-const S: Record<string, React.CSSProperties> = {
-  root: {
-    width: 320,
-    padding: 16,
-    fontFamily: 'system-ui, sans-serif',
-    fontSize: 14,
-    color: '#1a1a1a',
-    boxSizing: 'border-box',
-  },
-  h1: { margin: '0 0 12px', fontSize: 18, color: '#2f8d46' },
-  muted: { color: '#666', margin: '8px 0' },
-  primary: {
-    width: '100%',
-    padding: '10px 12px',
-    background: '#2f8d46',
-    color: '#fff',
-    border: 'none',
-    borderRadius: 6,
-    fontSize: 14,
-    cursor: 'pointer',
-  },
-  hint: { color: '#666', fontSize: 12, lineHeight: 1.4, margin: '10px 0 0' },
-  code: {
-    fontFamily: 'ui-monospace, monospace',
-    fontSize: 24,
-    letterSpacing: 2,
-    textAlign: 'center',
-    padding: '10px 0',
-    background: '#f3f4f6',
-    borderRadius: 6,
-    marginBottom: 10,
-  },
-  connected: { color: '#2f8d46', fontWeight: 600, margin: '0 0 12px' },
-  warn: {
-    background: '#fff7ed',
-    border: '1px solid #fed7aa',
-    borderRadius: 6,
-    padding: 10,
-    fontSize: 12,
-    color: '#7c2d12',
-    lineHeight: 1.4,
-  },
-  error: {
-    marginTop: 12,
-    background: '#fef2f2',
-    border: '1px solid #fecaca',
-    borderRadius: 6,
-    padding: 8,
-    fontSize: 12,
-    color: '#991b1b',
-    wordBreak: 'break-word',
-  },
-  label: { display: 'block', color: '#444', fontSize: 12 },
-  select: { display: 'block', width: '100%', marginTop: 4, padding: 6, fontSize: 14 },
-  orLabel: { color: '#888', fontSize: 12, margin: '12px 0 4px' },
-  createRow: { display: 'flex', gap: 6 },
-  input: {
-    flex: 1,
-    minWidth: 0,
-    padding: 6,
-    fontSize: 14,
-    border: '1px solid #d1d5db',
-    borderRadius: 6,
-    boxSizing: 'border-box',
-  },
-  secondary: {
-    padding: '6px 12px',
-    background: '#fff',
-    color: '#2f8d46',
-    border: '1px solid #2f8d46',
-    borderRadius: 6,
-    fontSize: 14,
-    cursor: 'pointer',
-    whiteSpace: 'nowrap',
-  },
-  checkRow: { display: 'flex', alignItems: 'center', gap: 6, color: '#444', fontSize: 12, marginTop: 6 },
-  history: { marginTop: 14, borderTop: '1px solid #eee', paddingTop: 10 },
-  historyHead: { margin: '0 0 6px', fontSize: 12, fontWeight: 600, color: '#444' },
-  list: { listStyle: 'none', margin: 0, padding: 0 },
-  item: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    gap: 8,
-    padding: '3px 0',
-    fontSize: 12,
-    borderBottom: '1px solid #f3f4f6',
-  },
-  itemTitle: { color: '#1a1a1a', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
-  itemMeta: { color: '#888', whiteSpace: 'nowrap' },
-  status: {
-    marginTop: 12,
-    padding: 8,
-    background: '#f3f4f6',
-    borderRadius: 6,
-    fontSize: 12,
-    color: '#444',
-    wordBreak: 'break-word',
-  },
-};

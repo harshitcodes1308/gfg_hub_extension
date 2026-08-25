@@ -146,7 +146,24 @@ async function getState(): Promise<AppState> {
     lastAuthPollAt = Date.now();
     pollPendingAuth().catch((e) => console.warn('GFGHub auth-poll:', e?.message ?? e));
   }
-  return { connected, user, repo, lastStatus, pendingAuth, recentSyncs: recentSyncs.slice(0, 20) };
+  // Tally solved problems by difficulty over the FULL history — the stat cards
+  // want an all-time count, but recentSyncs is capped below for the list view.
+  const stats = { easy: 0, medium: 0, hard: 0 };
+  for (const r of recentSyncs) {
+    const d = r.difficulty?.toLowerCase();
+    if (d === 'easy') stats.easy++;
+    else if (d === 'medium') stats.medium++;
+    else if (d === 'hard') stats.hard++;
+  }
+  return {
+    connected,
+    user,
+    repo,
+    lastStatus,
+    pendingAuth,
+    recentSyncs: recentSyncs.slice(0, 20),
+    stats,
+  };
 }
 
 /**

@@ -52,6 +52,10 @@ export interface AppState {
   pendingAuth?: { userCode: string; verificationUri: string };
   /** Recently synced problems, most-recent first, for the popup history list. */
   recentSyncs?: SyncRecord[];
+  /** All-time solved tally by difficulty, for the popup's stat cards. Computed
+   *  from the full history in getState (recentSyncs is capped for the list, so
+   *  the popup can't derive an accurate total itself). */
+  stats?: { easy: number; medium: number; hard: number };
 }
 
 /** Device-flow handshake: the popup shows the code and opens the verify page. */
