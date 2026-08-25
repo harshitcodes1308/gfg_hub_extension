@@ -3,7 +3,7 @@
 // the page's MAIN world (the one thing content scripts can't do) then runs the
 // sync pipeline. MV3 kills this after ~30s idle, so it holds no durable state:
 // everything persists through src/storage.ts.
-import { requestDeviceCode, pollForToken } from '../github/auth';
+import { requestDeviceCode, pollOnce } from '../github/auth';
 import { GitHubClient } from '../github/client';
 import { readAceCode } from '../gfg/readCode';
 import { GFG_SELECTORS } from '../gfg/selectors';
@@ -33,6 +33,8 @@ import type {
 
 // Best-effort, in-memory only (dies with the SW). Durable state is in storage.
 let lastStatus: string | undefined;
+// Debounce for the opportunistic auth poll the popup's GET_STATE triggers.
+let lastAuthPollAt = 0;
 
 chrome.runtime.onMessage.addListener((msg: Message, sender, sendResponse) => {
   handle(msg, sender)
@@ -45,12 +47,17 @@ chrome.runtime.onMessage.addListener((msg: Message, sender, sendResponse) => {
 // MV3 kills the SW after ~30s idle, so a setTimeout retry would die with it.
 // chrome.alarms survive SW restarts (FURTHER_STEPS §2).
 const DRAIN_ALARM = 'gfghub-drain';
+/** Drives the device-flow token poll. An alarm (30s floor), not a setTimeout
+ *  loop, so the handshake survives the SW being terminated mid-login. */
+const AUTH_POLL_ALARM = 'gfghub-auth-poll';
 
 chrome.runtime.onInstalled.addListener(() => chrome.alarms.create(DRAIN_ALARM, { periodInMinutes: 5 }));
 chrome.runtime.onStartup.addListener(() => chrome.alarms.create(DRAIN_ALARM, { periodInMinutes: 5 }));
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === DRAIN_ALARM) {
     runDrain().catch((e) => console.warn('GFGHub drain:', e?.message ?? e));
+  } else if (alarm.name === AUTH_POLL_ALARM) {
+    pollPendingAuth().catch((e) => console.warn('GFGHub auth-poll:', e?.message ?? e));
   }
 });
 
@@ -130,34 +137,72 @@ async function getState(): Promise<AppState> {
     !connected && pending && pending.expiresAt > Date.now()
       ? { userCode: pending.userCode, verificationUri: pending.verificationUri }
       : undefined;
+  // The popup polls GET_STATE every 2s while open. If a login is pending, ride
+  // that to poll the token endpoint now (debounced above GitHub's 5s cadence)
+  // so the popup flips to connected within seconds — not after the 30s alarm.
+  // Fire-and-forget: this call returns the pre-poll state; the popup's next tick
+  // reflects the stored token. The alarm remains the backstop for a shut popup.
+  if (pendingAuth && Date.now() - lastAuthPollAt > 6000) {
+    lastAuthPollAt = Date.now();
+    pollPendingAuth().catch((e) => console.warn('GFGHub auth-poll:', e?.message ?? e));
+  }
   return { connected, user, repo, lastStatus, pendingAuth, recentSyncs: recentSyncs.slice(0, 20) };
 }
 
 /**
- * Device flow: get a code, persist it (so the popup can re-show it after it
- * auto-closes), respond to the popup, then keep polling in the background until
- * authorized. The pending fetch loop keeps the SW alive across poll intervals.
+ * Device flow: get a code, persist it (including the opaque deviceCode so an
+ * alarm-woken SW can resume), respond to the popup, and arm the poll alarm.
+ * We deliberately do NOT poll in a background loop here: MV3 terminates the idle
+ * SW while the user is over on the GitHub tab, and that kills any setTimeout
+ * loop — the bug where the popup stayed stuck showing the code. The alarm
+ * survives SW restarts and wakes it to finish the handshake (pollPendingAuth).
  */
 async function startConnect(): Promise<ConnectResponse> {
   const dc = await requestDeviceCode();
   await setPendingAuth({
     userCode: dc.userCode,
     verificationUri: dc.verificationUri,
+    deviceCode: dc.deviceCode,
     expiresAt: Date.now() + dc.expiresIn * 1000,
   });
-  pollForToken(dc)
-    .then(async (token) => {
-      const user = await new GitHubClient(token).getUser();
-      await setToken(token, { login: user.login });
-      await clearPendingAuth();
-      lastStatus = `Connected as @${user.login}`;
-    })
-    .catch(async (err) => {
-      await clearPendingAuth();
-      lastStatus = 'GitHub sign-in failed.';
-      console.warn('device-flow:', err?.message ?? err); // never logs the token
-    });
+  // 0.5 min = 30s, the released-extension floor for alarms. GitHub asks for 5s,
+  // but a slower poll that actually survives beats a fast one that dies with
+  // the worker. The popup's own 2s GET_STATE poll reflects the result promptly.
+  chrome.alarms.create(AUTH_POLL_ALARM, { periodInMinutes: 0.5 });
   return { userCode: dc.userCode, verificationUri: dc.verificationUri };
+}
+
+/**
+ * One device-flow poll, fired by AUTH_POLL_ALARM. Reads the pending login from
+ * storage (so it works even after an SW restart), polls once, and either
+ * finishes the handshake (store token → the popup's GET_STATE flips to
+ * connected), stops on a terminal error/expiry, or leaves the alarm to tick
+ * again. Always clears the alarm when polling should stop, so it can't run on.
+ */
+async function pollPendingAuth(): Promise<void> {
+  const pending = await getPendingAuth();
+  if (!pending || pending.expiresAt <= Date.now()) {
+    await chrome.alarms.clear(AUTH_POLL_ALARM);
+    if (pending) {
+      await clearPendingAuth();
+      lastStatus = 'GitHub sign-in timed out — try again.';
+    }
+    return;
+  }
+  const result = await pollOnce(pending.deviceCode);
+  if (result.status === 'authorized') {
+    const user = await new GitHubClient(result.token).getUser();
+    await setToken(result.token, { login: user.login });
+    await clearPendingAuth();
+    await chrome.alarms.clear(AUTH_POLL_ALARM);
+    lastStatus = `Connected as @${user.login}`;
+  } else if (result.status === 'error') {
+    await clearPendingAuth();
+    await chrome.alarms.clear(AUTH_POLL_ALARM);
+    lastStatus = 'GitHub sign-in failed.';
+    console.warn('device-flow:', result.message); // never logs the token
+  }
+  // 'pending' / 'slow_down' → do nothing; the next alarm tick polls again.
 }
 
 async function listRepos(): Promise<ReposResponse> {
