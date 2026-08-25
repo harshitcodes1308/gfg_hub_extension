@@ -97,6 +97,34 @@ function normalizeTags(raw: unknown): string[] {
     .filter(Boolean);
 }
 
+/** Pull the topic tags out of parsed __NEXT_DATA__.
+ *
+ *  GFG nests them as `tags.topic_tags` — a `tags` OBJECT that ALSO holds
+ *  `company_tags` — while older/other shapes expose them flat as `topicTags`
+ *  or `topic_tags`. So we search the specific topic-tag keys FIRST: findFirst
+ *  descends depth-first and reaches the nested array wherever it lives. We must
+ *  NOT search the bare `tags` key for the primary case, because it resolves to
+ *  the wrapper object (its value is not an array) and normalizeTags would drop
+ *  every tag — the bug that filed real GFG solves under "Miscellaneous".
+ *  Only when no topic-tag key exists do we fall back to a top-level `tags`
+ *  ARRAY (e.g. `[{name:'Greedy'}, …]`). */
+function findTopics(data: unknown): string[] {
+  const direct = findFirst(data, ['topicTags', 'topic_tags']);
+  if (direct !== undefined) return normalizeTags(direct);
+  return normalizeTags(findFirst(data, ['tags']));
+}
+
+/** Pull the problem title out of parsed __NEXT_DATA__.
+ *
+ *  Prefer the problem-specific keys ANYWHERE in the tree before the generic
+ *  `title`/`name`. Those generic keys also match unrelated nodes — nav menus,
+ *  course cards — that sit earlier in the depth-first walk, so searching them
+ *  together titled every real solve "Courses". */
+function findTitle(data: unknown): string {
+  const raw = findFirst(data, ['problemName', 'problem_name']) ?? findFirst(data, ['title', 'name']);
+  return typeof raw === 'string' ? raw.trim() : '';
+}
+
 /** Recover problem metadata from the embedded `#__NEXT_DATA__` JSON, which is
  *  often more stable than the hashed CSS-module class names. Returns undefined
  *  when the script is absent, the JSON is unparseable, or no title is found —
@@ -110,8 +138,7 @@ export function metaFromNextData(root: ParentNode, url: string): ProblemMeta | u
   } catch {
     return undefined;
   }
-  const rawTitle = findFirst(data, ['problemName', 'problem_name', 'title', 'name']);
-  const title = typeof rawTitle === 'string' ? rawTitle.trim() : '';
+  const title = findTitle(data);
   if (!title) return undefined;
   const rawDifficulty = findFirst(data, ['difficulty']);
   const difficulty =
@@ -121,7 +148,7 @@ export function metaFromNextData(root: ParentNode, url: string): ProblemMeta | u
     url: canonicalUrl(url),
     title,
     difficulty,
-    topics: normalizeTags(findFirst(data, ['topicTags', 'topic_tags', 'tags'])),
+    topics: findTopics(data),
   };
 }
 

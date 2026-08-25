@@ -21,8 +21,6 @@ export interface DeviceCode {
   expiresIn: number;
 }
 
-const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
-
 async function form(url: string, body: Record<string, string>): Promise<Record<string, string>> {
   const res = await fetch(url, {
     method: 'POST',
@@ -54,31 +52,35 @@ export async function requestDeviceCode(): Promise<DeviceCode> {
   };
 }
 
-/**
- * Step 2: poll the token endpoint until the user authorizes. Handles GitHub's
- * pacing signals (`authorization_pending` = keep waiting, `slow_down` = back
- * off). Resolves with the access token, or rejects if the code expires or the
- * user denies (the outer deadline is a backstop against polling forever).
- */
-export async function pollForToken(dc: DeviceCode): Promise<string> {
-  const deadline = Date.now() + dc.expiresIn * 1000;
-  let interval = dc.interval;
+/** Outcome of a single token-endpoint poll. */
+export type PollResult =
+  | { status: 'authorized'; token: string }
+  | { status: 'pending' }
+  | { status: 'slow_down'; interval: number }
+  | { status: 'error'; message: string };
 
-  while (Date.now() < deadline) {
-    await delay(interval * 1000);
-    const data = await form(TOKEN_URL, {
-      client_id: GITHUB_CLIENT_ID,
-      device_code: dc.deviceCode,
-      grant_type: GRANT_TYPE,
-    });
-    if (data.access_token) return data.access_token;
-    if (data.error === 'authorization_pending') continue;
-    if (data.error === 'slow_down') {
-      interval = Number(data.interval) || interval + 5;
-      continue;
-    }
-    // access_denied, expired_token, or anything unexpected — stop.
-    throw new Error(data.error_description || data.error || 'github-device-flow-failed');
-  }
-  throw new Error('github-device-flow-expired');
+/** Classify GitHub's token-endpoint JSON. Pure, so it's unit-tested directly.
+ *  GitHub answers a still-pending poll with HTTP 200 + `authorization_pending`
+ *  (verified against the live endpoint), so a non-token response is normal, not
+ *  a failure — only access_denied / expired_token / the unexpected are fatal. */
+export function classifyTokenResponse(data: Record<string, string>): PollResult {
+  if (data.access_token) return { status: 'authorized', token: data.access_token };
+  if (data.error === 'authorization_pending') return { status: 'pending' };
+  if (data.error === 'slow_down') return { status: 'slow_down', interval: Number(data.interval) || 0 };
+  return { status: 'error', message: data.error_description || data.error || 'github-device-flow-failed' };
+}
+
+/**
+ * Step 2: ONE poll of the token endpoint. The caller repeats this on a durable
+ * chrome.alarms tick — NOT an in-SW setTimeout loop, which MV3 silently kills
+ * when it terminates the idle worker (that left the handshake half-finished and
+ * the popup stuck showing the code).
+ */
+export async function pollOnce(deviceCode: string): Promise<PollResult> {
+  const data = await form(TOKEN_URL, {
+    client_id: GITHUB_CLIENT_ID,
+    device_code: deviceCode,
+    grant_type: GRANT_TYPE,
+  });
+  return classifyTokenResponse(data);
 }

@@ -67,6 +67,26 @@ const SYNONYMS: Record<string, string> = {
   'sliding-window': 'Sliding Window',
   'two-pointer': 'Two Pointers',
   'two pointers': 'Two Pointers',
+  // Real GFG tag spellings observed on live problem pages — routed into the
+  // fixed folders above so they don't fall to Miscellaneous. (primaryCategory
+  // already walks past a leading unknown tag, so these only decide the folder
+  // when they're the first KNOWN tag.)
+  'two pointer algorithm': 'Two Pointers',
+  'two-pointer-algorithm': 'Two Pointers',
+  'prefix sum': 'Arrays',
+  'prefix-sum': 'Arrays',
+  'segment tree': 'Trees',
+  'segment-tree': 'Trees',
+  'pattern searching': 'Strings',
+  'disjoint set': 'Graphs',
+  'union find': 'Graphs',
+  'doubly linked list': 'Linked List',
+  'circular linked list': 'Linked List',
+  hashmap: 'Hashing',
+  'number theory': 'Math',
+  combinatorial: 'Math',
+  geometric: 'Math',
+  geometry: 'Math',
 };
 
 const CANON = new Map<string, string>(CATEGORIES.map((c) => [c.toLowerCase(), c]));
