@@ -62,3 +62,4 @@ Wrong submissions push nothing; re-solving an already-synced problem is a no-op.
 
 The GitHub OAuth token is stored only in `chrome.storage.local` and is never
 logged. Requested permissions are minimal: `storage` + `scripting`.
+this edit is done by shiven.
