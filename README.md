@@ -24,7 +24,7 @@ maintenance, retry queue, store release, …).
 
 ```bash
 npm install
-npm test        # unit suites: extract / detect / languages / categories / storage / github client / sync
+npm test        # unit suites: extract / detect / languages / categories / storage / github auth / github client / sync
 npm run build   # bundles the extension into dist/
 ```
 
