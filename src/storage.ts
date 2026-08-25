@@ -37,10 +37,13 @@ export interface PendingSync {
 }
 
 /** An in-progress device-flow login. Persisted so the popup can re-show the
- *  code after it auto-closes (Chrome closes popups when a new tab takes focus). */
+ *  code after it auto-closes (Chrome closes popups when a new tab takes focus),
+ *  AND so the alarm-driven poll can resume the handshake after MV3 restarts the
+ *  service worker. `deviceCode` is the opaque token we poll with — never shown. */
 export interface PendingAuth {
   userCode: string;
   verificationUri: string;
+  deviceCode: string;
   expiresAt: number;
 }
 
