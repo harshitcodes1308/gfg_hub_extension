@@ -174,21 +174,22 @@ export function extractMeta(root: ParentNode, url: string): ProblemMeta {
   };
 }
 
-/** Result of the DOM selector health-check: which best-effort fields the current
- *  selectors yield nothing for, so callers can surface "couldn't read X" instead
- *  of failing silently. */
-export interface SelectorHealth {
-  ok: boolean;
-  missing: string[];
-}
-
-/** Report which of 'title' | 'difficulty' | 'topics' the DOM selectors return
- *  nothing for. DOM-only by design — this exists to catch selector rot, so it
- *  deliberately ignores __NEXT_DATA__. */
-export function checkSelectorHealth(root: ParentNode): SelectorHealth {
+/** Best-effort fields that extraction genuinely could NOT recover — from either
+ *  __NEXT_DATA__ or the DOM. Reported so a real GFG layout change surfaces as
+ *  "couldn't read X" (§46) instead of a solution getting silently filed under
+ *  the default category.
+ *
+ *  Derived from the FINAL meta, deliberately NOT a separate DOM re-scrape:
+ *  __NEXT_DATA__ is the primary source and the DOM is only a fallback, so a
+ *  rotted DOM selector that __NEXT_DATA__ already covered must not be flagged.
+ *  (Re-scraping the DOM here was the old bug: a scary "extraction degraded"
+ *  warning fired on every solve while the sync was actually fine.) `title`
+ *  never comes back empty — extractMeta falls it back to the slug — so a title
+ *  equal to the slug means "no real title was found". */
+export function missingMetaFields(meta: ProblemMeta): string[] {
   const missing: string[] = [];
-  if (!text(root, GFG_SELECTORS.title)) missing.push('title');
-  if (!extractDifficulty(root)) missing.push('difficulty');
-  if (extractTopics(root).length === 0) missing.push('topics');
-  return { ok: missing.length === 0, missing };
+  if (meta.title === meta.slug) missing.push('title');
+  if (!meta.difficulty) missing.push('difficulty');
+  if (meta.topics.length === 0) missing.push('topics');
+  return missing;
 }

@@ -247,11 +247,11 @@ async function handleSubmission(
     return { status: 'failed', slug: meta.slug, message: 'No source tab.' };
   }
 
-  // Selector-rot canary from the content script: log which fields came back
-  // empty so a silent GFG layout change is visible (§46). We still sync — meta
-  // is best-effort and the slug/URL (the parts that matter) come from the URL.
+  // Canary from the content script: fields extraction genuinely couldn't recover
+  // (§46). We still sync — meta is best-effort and the slug/URL (the parts that
+  // matter) come from the page URL, not the DOM.
   if (msg.missing?.length) {
-    console.warn('GFGHub: content script read nothing for', msg.missing.join(', '));
+    console.warn('GFGHub: could not recover', msg.missing.join(', '), 'for this problem.');
   }
 
   // Read the full buffer from the page's MAIN world — the whole reason the SW

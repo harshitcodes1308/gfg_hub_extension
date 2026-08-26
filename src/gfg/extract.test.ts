@@ -5,7 +5,7 @@ import {
   extractMeta,
   extractTopics,
   metaFromNextData,
-  checkSelectorHealth,
+  missingMetaFields,
 } from './extract';
 
 // Representative GFG problem-page structure (hashed CSS-module class names,
@@ -198,20 +198,46 @@ describe('extractMeta with __NEXT_DATA__', () => {
   });
 });
 
-describe('checkSelectorHealth', () => {
-  it('reports ok with no missing fields for a complete fixture', () => {
-    expect(checkSelectorHealth(root(FIXTURE))).toEqual({ ok: true, missing: [] });
+describe('missingMetaFields', () => {
+  const url = 'https://www.geeksforgeeks.org/problems/two-sum-1587115621/1';
+
+  it('reports nothing missing for a complete DOM fixture', () => {
+    expect(missingMetaFields(extractMeta(root(FIXTURE), url))).toEqual([]);
   });
 
-  it('flags topics when the Topic Tags container is absent', () => {
+  it('flags difficulty and topics when the DOM has only a title', () => {
+    const html = `<div class="problems_header_content__title__ABC"><h3>Two Sum</h3></div>`;
+    const missing = missingMetaFields(extractMeta(root(html), url));
+    expect(missing).toContain('difficulty');
+    expect(missing).toContain('topics');
+    expect(missing).not.toContain('title');
+  });
+
+  it('flags title when nothing yields a real title (it falls back to the slug)', () => {
+    expect(missingMetaFields(extractMeta(root('<div></div>'), url))).toContain('title');
+  });
+
+  it('does NOT flag topics when __NEXT_DATA__ has them but the DOM tag container rotted', () => {
+    // The exact false alarm this replaced: GFG renamed/collapsed the topic-tag
+    // DOM so the fallback selector matches nothing, while __NEXT_DATA__ still
+    // carries the tags. The sync is fine, so no field should be reported missing.
+    const data = {
+      props: {
+        pageProps: {
+          problemInfo: {
+            problemName: 'First and Last Occurrences of X',
+            difficulty: 'Easy',
+            tags: { company_tags: ['Amazon'], topic_tags: ['Arrays', 'Searching'] },
+          },
+        },
+      },
+    };
     const html = `
-      <div class="problems_header_content__title__ABC"><h3>Two Sum</h3></div>
-      <div class="problems_header_description__XYZ">Difficulty: Medium</div>
+      ${nextData(data)}
+      <div class="some_renamed_class__q9"><span>Topic Tags</span><span>Arrays</span></div>
     `;
-    const health = checkSelectorHealth(root(html));
-    expect(health.ok).toBe(false);
-    expect(health.missing).toContain('topics');
-    expect(health.missing).not.toContain('title');
-    expect(health.missing).not.toContain('difficulty');
+    const meta = extractMeta(root(html), url);
+    expect(meta.topics).toEqual(['Arrays', 'Searching']);
+    expect(missingMetaFields(meta)).toEqual([]);
   });
 });

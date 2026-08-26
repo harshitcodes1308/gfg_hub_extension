@@ -3,7 +3,7 @@
 // read the code — that needs the page's MAIN world, which only the SW can reach
 // via chrome.scripting (isolated content scripts can't see window.ace).
 import { waitForVerdict } from '../gfg/detect';
-import { extractMeta, slugFromUrl, checkSelectorHealth } from '../gfg/extract';
+import { extractMeta, slugFromUrl, missingMetaFields } from '../gfg/extract';
 import type { SubmissionAcceptedMsg } from '../messages';
 
 // Slug we've already reported this page-load — avoids re-sending while the
@@ -25,19 +25,22 @@ async function watch(): Promise<void> {
       if (slug && slug !== lastReportedSlug) {
         lastReportedSlug = slug;
         const meta = extractMeta(document.body, location.href);
-        // Selector-rot canary: if the DOM yields nothing for a field, say so in
-        // the console and pass it along, rather than silently committing gaps.
-        const health = checkSelectorHealth(document.body);
-        if (!health.ok) {
+        // Warn only about fields we genuinely couldn't recover (from __NEXT_DATA__
+        // OR the DOM), so a real GFG layout change stays visible (§46) without
+        // crying wolf when only the fallback DOM selector rotted but __NEXT_DATA__
+        // still had the data. The sync proceeds regardless — slug/URL come from
+        // the address bar, so the commit itself is never blocked.
+        const missing = missingMetaFields(meta);
+        if (missing.length) {
           console.warn(
-            `GFGHub: page selectors returned nothing for ${health.missing.join(', ')} — ` +
-              'extraction may be degraded (GFG layout changed?).',
+            `GFGHub: couldn't read ${missing.join(', ')} for this problem — it will still ` +
+              'sync, but its category or details may be incomplete (GFG layout may have changed).',
           );
         }
         const msg: SubmissionAcceptedMsg = {
           type: 'SUBMISSION_ACCEPTED',
           meta,
-          missing: health.missing,
+          missing,
         };
         chrome.runtime.sendMessage(msg).catch(() => {
           /* SW asleep or context torn down — next verdict re-arms. */
